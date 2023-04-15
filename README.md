@@ -26,3 +26,16 @@ When the bot will scrape enough jobs, I might be interesting to visualize the sk
 - [x] Build a scraper bot
 - [x] Scrape jobs
 - [ ] Create a word cloud of skills.
+
+---
+
+## Code Structure
+
+### `Scraper.py`
+Scraper is the bot that interacts with LinkedIn to scrape jobs.
+
+### `Database.py`
+Database is an object that interacts with the database.
+
+### `CSV.py`
+CSV.py contains utility functions to save the data into a datframe.
