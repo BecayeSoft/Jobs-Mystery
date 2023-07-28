@@ -7,16 +7,28 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
+from retry import  retry
 
 class Scraper:
 
     def __init__(self, delay=3):
-        self.delay=delay
+        """
+        Initialize the scraper.
+
+        Parameters
+        ----------
+        delay: int
+            The delay between each action. Useful when the internet connection is unstable.
+        """
+        self.delay = delay
         self.driver = webdriver.Chrome()
+        self.print_colors = {'WARNING': '\033[93m', 'ERROR': '\033[91m'}
+
 
     def login(self, email, password):
-        """Log in to linkedin.com"""
-
+        """
+        Log in to linkedin.com using the given email and password
+        """
         self.driver.get('https://www.linkedin.com/login')
         time.sleep(self.delay)
 
@@ -27,29 +39,38 @@ class Scraper:
         self.driver.find_element(By.ID, "password").send_keys(password, Keys.ENTER)
 
 
+    @retry(TimeoutException, delay=5, tries=5)
     def wait_till_element_ready(self, by, selector):
         """
-        Wait for a given element to be ready
+        Wait for a given element to be ready.
+        Useful when the element is not loaded yet and you want to wait for it to be loaded.
 
-        :param by: the selector strategy. E.g.: By.ID, By.CLASS_NAME, etc.
-        :param selector: the CSS selector according to the "By" strategy. E.g.: 'class name', 'id', etc.
+        Parameters
+        ----------
+        by: selenium.webdriver.common.by.By
+            The selector strategy. E.g.: By.ID, By.CLASS_NAME, etc.
+        selector: 
+            The CSS selector. Can be 'class name', 'id', etc.
         """
-
-        colors = {'WARNING': '\033[93m', 'ERROR': '\033[91m'}
         try:
             WebDriverWait(self.driver, 8).until(EC.presence_of_element_located((by, selector)))
             time.sleep(self.delay)
 
         except TimeoutException:
-            print(colors['WARNING'] + "Warning: Element has not been loaded!")
+            print(self.print_colors['WARNING'] + "Warning: Element has not been loaded!")
             pass
 
 
     def search_jobs(self, position, location):
         """
-        Search jobs by entering position and location into the search bars.
+        Search jobs on LinkedIn.
+        This method enters the position and location into the search bars
+        and returns the pagination buttons. These button are used to navigate through each page.
 
-        @:returns get_pagination_buttons(): the pagination buttons to navigate to the next page
+        Returns
+        -------
+        pagination_buttons: list
+            A list of pagination buttons. These buttons are used to navigate through each page.
         """
 
         self.driver.get("https://www.linkedin.com/jobs/")
@@ -59,7 +80,7 @@ class Scraper:
         self.wait_till_element_ready(By.CLASS_NAME, "jobs-search-box__text-input")
         search_bars = self.driver.find_elements(By.CLASS_NAME, "jobs-search-box__text-input")
 
-        print("Found %d search bars" %len(search_bars))
+        print("Found %d search bars" % len(search_bars))
         print(search_bars[3])
 
         # enter job position in the search  by keyword bar
@@ -72,7 +93,6 @@ class Scraper:
         search_by_location_bar.send_keys(location, Keys.RETURN)
 
         return self.get_pagination_buttons()
-
 
     def get_jobs_info(self):
         """
@@ -118,35 +138,45 @@ class Scraper:
 
     def get_job_skills(self):
         """
-        Click on the skills to displays them in a popup, then extract them
+        Click on the skills to displays them in a popup, then extract them.
         """
 
-        # click display skills popup
-        self.wait_till_element_ready(By.CLASS_NAME, 'jobs-unified-top-card__job-insight-text-button')
-        time.sleep(self.delay)
-        view_skills_button = self.driver.find_element(By.CLASS_NAME, 'jobs-unified-top-card__job-insight-text-button')
-        view_skills_button.click()
+        for _ in range(5):
+            try:
+            # click display skills popup
+                self.wait_till_element_ready(By.CLASS_NAME, 'jobs-unified-top-card__job-insight-text-button')
+                time.sleep(self.delay)
+                view_skills_button = self.driver.find_element(By.CLASS_NAME, 'jobs-unified-top-card__job-insight-text-button')
+                view_skills_button.click()
 
-        # get skills list
-        self.wait_till_element_ready(By.CLASS_NAME, "job-details-skill-match-status-list")
-        time.sleep(self.delay)
-        skills_list = self.driver.find_element(By.CLASS_NAME, 'job-details-skill-match-status-list')
+                # get skills list
+                self.wait_till_element_ready(By.CLASS_NAME, "job-details-skill-match-status-list")
+                time.sleep(self.delay)
+                skills_list = self.driver.find_element(By.CLASS_NAME, 'job-details-skill-match-status-list')
 
-        # get clean skills list
-        skills_list_clean = skills_list.text.split('\n')
-        skills_list_clean = list(filter(lambda skill: skill != 'Add', skills_list_clean))
+                # get clean skills list
+                skills_list_clean = skills_list.text.split('\n')
+                skills_list_clean = list(filter(lambda skill: skill != 'Add', skills_list_clean))
 
-        # close the skills list popup
-        self.wait_till_element_ready(By.CLASS_NAME, 'artdeco-modal__dismiss')
-        time.sleep(self.delay)
-        close_popup_button = self.driver.find_element(By.CLASS_NAME, 'artdeco-modal__dismiss')
-        close_popup_button.click()
+                # close the skills list popup
+                self.wait_till_element_ready(By.CLASS_NAME, 'artdeco-modal__dismiss')
+                time.sleep(self.delay)
+                close_popup_button = self.driver.find_element(By.CLASS_NAME, 'artdeco-modal__dismiss')
+                close_popup_button.click()
 
-        return skills_list_clean
+                return skills_list_clean
+
+            except Exception as e:
+                print(self.print_colors['WARNING'] + "Warning: Exception occured:", e)
+                time.sleep(3)
+                continue
 
 
     def get_pagination_buttons(self):
-        """Find the pagination buttons. These buttons are used to navigate through each page"""
+        """
+        Find the pagination buttons. 
+        These buttons are used to navigate through each page.
+        """
 
         time.sleep(self.delay)
         # self.wait_till_element_ready(By.CLASS_NAME, "artdeco-pagination__pages")
@@ -159,5 +189,7 @@ class Scraper:
 
 
     def close_driver(self):
+        """
+        Close the browser
+        """
         self.driver.quit()
-
